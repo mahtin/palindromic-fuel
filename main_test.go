@@ -18,7 +18,9 @@
 package main
 
 import (
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -288,6 +290,160 @@ func TestFindNearestPalindromicCost(t *testing.T) {
 					tt.pricePerLitre, tt.targetLitres, tt.searchRadius)
 			}
 		})
+	}
+}
+
+func TestFindPalindromicCostForTarget(t *testing.T) {
+	tests := []struct {
+		name              string
+		pricePerLitre     float64
+		targetPounds      float64
+		searchRadiusPence int
+		expectedCount     int
+	}{
+		{"find near £32.23", 128.9, 32.23, 100, 1},
+		{"find near £50.05", 128.9, 50.05, 100, 1},
+		{"no results in radius", 128.9, 1000.00, 10, 0},
+		{"multiple results", 128.9, 50.00, 500, 2}, // Should find both 32.23 and 50.05
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results := FindPalindromicCostForTarget(tt.pricePerLitre, tt.targetPounds, tt.searchRadiusPence)
+			if len(results) != tt.expectedCount {
+				t.Errorf("FindPalindromicCostForTarget(%f, %f, %d) returned %d results, want %d",
+					tt.pricePerLitre, tt.targetPounds, tt.searchRadiusPence, len(results), tt.expectedCount)
+			}
+		})
+	}
+}
+
+func TestBatchFindPalindromicCosts(t *testing.T) {
+	tests := []struct {
+		name         string
+		prices       []float64
+		maxLitres    int
+		expectedKeys int
+	}{
+		{"single price", []float64{128.9}, 100, 1},
+		{"multiple prices", []float64{128.9, 135.7}, 50, 2},
+		{"empty prices", []float64{}, 100, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results := BatchFindPalindromicCosts(tt.prices, tt.maxLitres)
+			if len(results) != tt.expectedKeys {
+				t.Errorf("BatchFindPalindromicCosts(%v, %d) returned %d results, want %d keys",
+					tt.prices, tt.maxLitres, len(results), tt.expectedKeys)
+			}
+
+			// Verify each price has results
+			for _, price := range tt.prices {
+				if _, exists := results[price]; !exists {
+					t.Errorf("BatchFindPalindromicCosts missing results for price %f", price)
+				}
+			}
+		})
+	}
+}
+
+func TestPrintResult(t *testing.T) {
+	// Test printResult by capturing output (this is a bit tricky since it prints to stdout)
+	// We'll test that it doesn't panic and produces some output
+	result := Result{
+		Litres:             25.0,
+		CostPounds:         "32.23",
+		LitresIsPalindrome: false,
+		Type:               "whole",
+	}
+
+	// This should not panic
+	printResult(result)
+}
+
+func TestExportToCSV(t *testing.T) {
+	results := []Result{
+		{Litres: 25.0, CostPounds: "32.23", LitresIsPalindrome: false, Type: "whole"},
+		{Litres: 38.83, CostPounds: "50.05", LitresIsPalindrome: true, Type: "palindromic_decimal"},
+	}
+
+	// Test export to temporary file
+	tmpfile, err := os.CreateTemp("", "test_export_*.csv")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpfile.Name())
+	defer tmpfile.Close()
+
+	err = exportToCSV(tmpfile.Name(), results, 128.9)
+	if err != nil {
+		t.Errorf("exportToCSV failed: %v", err)
+	}
+
+	// Read back the file and verify content
+	content, err := os.ReadFile(tmpfile.Name())
+	if err != nil {
+		t.Errorf("Failed to read exported file: %v", err)
+	}
+
+	contentStr := string(content)
+	// Check for expected content
+	expectedLines := []string{
+		"Price per Litre (p),Litres,Cost (£),Litres is Palindrome,Type",
+		"128.9,25,32.23,No,whole",
+		"128.9,38.83,50.05,Yes,palindromic_decimal",
+	}
+
+	for _, line := range expectedLines {
+		if !strings.Contains(contentStr, line) {
+			t.Errorf("Expected line %q not found in exported CSV", line)
+		}
+	}
+}
+
+func TestExportBatchToCSV(t *testing.T) {
+	batchResults := map[float64][]Result{
+		128.9: {
+			{Litres: 25.0, CostPounds: "32.23", LitresIsPalindrome: false, Type: "whole"},
+		},
+		135.7: {
+			{Litres: 20.0, CostPounds: "27.14", LitresIsPalindrome: false, Type: "whole"},
+		},
+	}
+	prices := []float64{128.9, 135.7}
+
+	// Test export to temporary file
+	tmpfile, err := os.CreateTemp("", "test_batch_export_*.csv")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpfile.Name())
+	defer tmpfile.Close()
+
+	err = exportBatchToCSV(tmpfile.Name(), batchResults, prices)
+	if err != nil {
+		t.Errorf("exportBatchToCSV failed: %v", err)
+	}
+
+	// Read back the file and verify content
+	content, err := os.ReadFile(tmpfile.Name())
+	if err != nil {
+		t.Errorf("Failed to read exported file: %v", err)
+	}
+
+	contentStr := string(content)
+	// Check for header
+	if !strings.Contains(contentStr, "Price per Litre (p),Litres,Cost (£),Litres is Palindrome,Type") {
+		t.Errorf("CSV header not found in exported batch CSV")
+	}
+
+	// Check for data from both prices
+	if !strings.Contains(contentStr, "128.9,25,32.23,No,whole") {
+		t.Errorf("First price data not found in exported batch CSV")
+	}
+	if !strings.Contains(contentStr, "135.7,20,27.14,No,whole") {
+		t.Errorf("Second price data not found in exported batch CSV")
 	}
 }
 
