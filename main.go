@@ -542,6 +542,7 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
             border-radius: 8px;
             font-size: 16px;
             font-weight: 500;
+            font-family: inherit;
             cursor: pointer;
             transition: background 0.2s ease;
             box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
@@ -636,6 +637,7 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
             text-decoration: none;
             border-radius: 6px;
             font-weight: 500;
+            font-family: inherit;
             margin-top: 10px;
             transition: background 0.2s ease;
         }
