@@ -19,7 +19,13 @@ After one too many attempts at the perfect fill-up, I thought "there has to be a
 ```bash
 # Download the binary or build it yourself
 go build -o palindromic-fuel main.go
+
+# CLI mode
 ./palindromic-fuel -price=128.9 -max=100
+
+# Web server mode
+./palindromic-fuel -web
+# Then visit http://localhost:8080
 ```
 
 ## 💡 Usage
@@ -63,6 +69,36 @@ Output:
 | `-reverse-price` | Find nearest palindrome to £X |
 | `-radius` | Search radius (default: 100) |
 | `-csv` | Export to CSV |
+| `-web` | Start web server on port 8080 |
+| `-port` | Port for web server (default: 8080) |
+
+## 🌐 Web Interface
+
+The calculator also includes a web interface with a REST API:
+
+```bash
+# Start the web server
+./palindromic-fuel -web
+
+# Then visit http://localhost:8080
+```
+
+**Features:**
+- Beautiful web UI for easy calculations
+- REST API for integration
+- GET/POST API endpoints
+- CORS enabled for web applications
+
+**API Examples:**
+```bash
+# GET request
+curl "http://localhost:8080/api/calculate?price=128.9&max=100"
+
+# POST request
+curl -X POST http://localhost:8080/api/calculate \
+  -H "Content-Type: application/json" \
+  -d '{"pricePerLitre": 128.9, "maxLitres": 100}'
+```
 
 ## 🧮 The Clever Bit
 
