@@ -727,13 +727,13 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
                         <input type="number" id="max" name="max" placeholder="100" required>
                     </div>
                 </div>
-                <button type="submit" class="btn">🚀 Calculate Palindromes</button>
+                <button type="submit" class="btn">Calculate Palindromes</button>
             </form>
         </div>
 
         {{if .Error}}
         <div class="error-card">
-            <strong>❌ Error:</strong> {{.Error}}
+            <strong>Error:</strong> {{.Error}}
         </div>
         {{end}}
 
@@ -794,7 +794,7 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
   -H "Content-Type: application/json" \
   -d '{"pricePerLitre": 128.9, "maxLitres": 100}'</div>
 
-            <a href="/api/calculate?price=128.9&max=50" target="_blank" class="api-link">🔗 Try the API</a>
+            <a href="/api/calculate?price=128.9&max=50" target="_blank" class="api-link">Try the API</a>
         </div>
     </div>
 </body>
