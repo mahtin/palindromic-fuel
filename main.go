@@ -1,0 +1,555 @@
+package main
+
+import (
+	"encoding/csv"
+	"flag"
+	"fmt"
+	"math"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// Result represents a palindromic fuel cost finding
+type Result struct {
+	Litres            float64
+	CostPounds        string
+	LitresIsPalindrome bool
+	Type              string
+}
+
+// isPalindrome checks if a number is palindromic
+func isPalindrome(n int) bool {
+	if n < 0 {
+		return false
+	}
+	if n < 10 {
+		return true
+	}
+	
+	original := n
+	reversed := 0
+	
+	for n > 0 {
+		reversed = reversed*10 + n%10
+		n /= 10
+	}
+	
+	return original == reversed
+}
+
+// isPalindromeString checks if a string is palindromic
+func isPalindromeString(s string) bool {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		if s[i] != s[j] {
+			return false
+		}
+	}
+	return true
+}
+
+// generatePalindromesForDigits generates all palindromic numbers with a given number of digits
+func generatePalindromesForDigits(digits int) []int {
+	var palindromes []int
+	
+	if digits == 1 {
+		for i := 1; i <= 9; i++ {
+			palindromes = append(palindromes, i)
+		}
+		return palindromes
+	}
+	
+	if digits == 2 {
+		for i := 1; i <= 9; i++ {
+			palindromes = append(palindromes, i*11)
+		}
+		return palindromes
+	}
+	
+	halfDigits := (digits + 1) / 2
+	min := int(math.Pow(10, float64(halfDigits-1)))
+	max := int(math.Pow(10, float64(halfDigits))) - 1
+	
+	for i := min; i <= max; i++ {
+		str := strconv.Itoa(i)
+		var palindrome string
+		
+		if digits%2 == 0 {
+			// Even digits: mirror completely
+			palindrome = str + reverse(str)
+		} else {
+			// Odd digits: mirror without center digit
+			palindrome = str + reverse(str[:len(str)-1])
+		}
+		
+		num, _ := strconv.Atoi(palindrome)
+		palindromes = append(palindromes, num)
+	}
+	
+	return palindromes
+}
+
+// reverse reverses a string
+func reverse(s string) string {
+	runes := []rune(s)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+	return string(runes)
+}
+
+// getPalindromicPencesInRange gets all palindromic pence values in a range
+func getPalindromicPencesInRange(minPence, maxPence int) []int {
+	minDigits := len(strconv.Itoa(minPence))
+	maxDigits := len(strconv.Itoa(maxPence))
+	
+	var results []int
+	
+	for d := minDigits; d <= maxDigits; d++ {
+		pals := generatePalindromesForDigits(d)
+		for _, pal := range pals {
+			if pal >= minPence && pal <= maxPence {
+				results = append(results, pal)
+			} else if pal > maxPence {
+				break
+			}
+		}
+	}
+	
+	return results
+}
+
+// formatPounds formats pence as pounds string
+func formatPounds(pence int) string {
+	pounds := float64(pence) / 100.0
+	return fmt.Sprintf("%.2f", pounds)
+}
+
+// isEffectivelyInteger checks if a float is close enough to an integer
+func isEffectivelyInteger(f float64, epsilon float64) bool {
+	return math.Abs(f-math.Round(f)) < epsilon
+}
+
+// FindPalindromicFuelCosts finds all palindromic fuel costs for a given price
+func FindPalindromicFuelCosts(pricePerLitre float64, maxLitres int) []Result {
+	var results []Result
+	
+	minPence := int(math.Floor(pricePerLitre))
+	maxPence := int(math.Ceil(float64(maxLitres) * pricePerLitre))
+	
+	// Get all palindromic pence values
+	palindromicPences := getPalindromicPencesInRange(minPence, maxPence)
+	
+	// Pre-calculate reciprocal for faster division
+	reciprocalPrice := 1.0 / pricePerLitre
+	
+	for _, pencePrice := range palindromicPences {
+		// Check if this palindromic pence is also palindromic as pounds
+		poundsStr := formatPounds(pencePrice)
+		if !isPalindromeString(poundsStr) {
+			continue
+		}
+		
+		litres := float64(pencePrice) * reciprocalPrice
+		
+		// Skip if exceeds max litres or less than 1
+		if litres > float64(maxLitres) {
+			break
+		}
+		if litres < 1.0 {
+			continue
+		}
+		
+		// Check if litres is effectively a whole number
+		if isEffectivelyInteger(litres, 0.01) {
+			wholeLitres := int(math.Round(litres))
+			results = append(results, Result{
+				Litres:            float64(wholeLitres),
+				CostPounds:        poundsStr,
+				LitresIsPalindrome: isPalindrome(wholeLitres),
+				Type:              "whole",
+			})
+		} else {
+			// Check if litres value itself is palindromic
+			litresRounded := math.Round(litres*100) / 100
+			litresStr := fmt.Sprintf("%.2f", litresRounded)
+			
+			if isPalindromeString(litresStr) {
+				results = append(results, Result{
+					Litres:            litresRounded,
+					CostPounds:        poundsStr,
+					LitresIsPalindrome: true,
+					Type:              "palindromic_decimal",
+				})
+			}
+		}
+	}
+	
+	return results
+}
+
+// FindNearestPalindromicCost finds the nearest palindromic cost to a target amount
+func FindNearestPalindromicCost(pricePerLitre float64, targetLitres float64, searchRadius int) *Result {
+	minLitres := int(math.Max(1, targetLitres-float64(searchRadius)))
+	maxLitres := int(targetLitres + float64(searchRadius))
+	
+	results := FindPalindromicFuelCosts(pricePerLitre, maxLitres)
+	
+	var nearest *Result
+	minDiff := math.MaxFloat64
+	
+	for i := range results {
+		if results[i].Litres < float64(minLitres) {
+			continue
+		}
+		
+		diff := math.Abs(results[i].Litres - targetLitres)
+		if diff < minDiff {
+			minDiff = diff
+			nearest = &results[i]
+		}
+	}
+	
+	return nearest
+}
+
+// FindPalindromicCostForTarget finds palindromic costs near a target price
+func FindPalindromicCostForTarget(pricePerLitre float64, targetPounds float64, searchRadiusPence int) []Result {
+	var results []Result
+	
+	targetPence := int(math.Round(targetPounds * 100))
+	minPence := targetPence - searchRadiusPence
+	maxPence := targetPence + searchRadiusPence
+	
+	if minPence < 1 {
+		minPence = 1
+	}
+	
+	// Get palindromic pences in range
+	palindromicPences := getPalindromicPencesInRange(minPence, maxPence)
+	reciprocalPrice := 1.0 / pricePerLitre
+	
+	for _, pencePrice := range palindromicPences {
+		poundsStr := formatPounds(pencePrice)
+		if !isPalindromeString(poundsStr) {
+			continue
+		}
+		
+		litres := float64(pencePrice) * reciprocalPrice
+		
+		if litres < 1.0 {
+			continue
+		}
+		
+		if isEffectivelyInteger(litres, 0.01) {
+			wholeLitres := int(math.Round(litres))
+			results = append(results, Result{
+				Litres:            float64(wholeLitres),
+				CostPounds:        poundsStr,
+				LitresIsPalindrome: isPalindrome(wholeLitres),
+				Type:              "whole",
+			})
+		} else {
+			litresRounded := math.Round(litres*100) / 100
+			litresStr := fmt.Sprintf("%.2f", litresRounded)
+			
+			if isPalindromeString(litresStr) {
+				results = append(results, Result{
+					Litres:            litresRounded,
+					CostPounds:        poundsStr,
+					LitresIsPalindrome: true,
+					Type:              "palindromic_decimal",
+				})
+			}
+		}
+	}
+	
+	return results
+}
+
+// BatchFindPalindromicCosts processes multiple fuel prices
+func BatchFindPalindromicCosts(prices []float64, maxLitres int) map[float64][]Result {
+	results := make(map[float64][]Result)
+	
+	for _, price := range prices {
+		results[price] = FindPalindromicFuelCosts(price, maxLitres)
+	}
+	
+	return results
+}
+
+func main() {
+	pricePtr := flag.Float64("price", 0, "Price per litre in pence (required)")
+	maxLitresPtr := flag.Int("max", 10000, "Maximum litres to check")
+	reverseLitresPtr := flag.Float64("reverse-litres", 0, "Find nearest palindrome to this litre amount")
+	reversePricePtr := flag.Float64("reverse-price", 0, "Find palindromes near this target price in pounds")
+	searchRadiusPtr := flag.Int("radius", 100, "Search radius for reverse lookup")
+	batchPtr := flag.String("batch", "", "Comma-separated list of prices for batch processing")
+	csvPtr := flag.String("csv", "", "Export results to CSV file (e.g., results.csv)")
+	
+	flag.Parse()
+	
+	if *pricePtr == 0 && *batchPtr == "" {
+		fmt.Println("Palindromic Fuel Cost Calculator")
+		fmt.Println("================================")
+		fmt.Println()
+		fmt.Println("Usage:")
+		fmt.Println("  Normal mode:")
+		fmt.Println("    ./palindromic-fuel -price=128.9 -max=100")
+		fmt.Println()
+		fmt.Println("  With CSV export:")
+		fmt.Println("    ./palindromic-fuel -price=128.9 -max=100 -csv=results.csv")
+		fmt.Println()
+		fmt.Println("  Reverse lookup (find nearest to target litres):")
+		fmt.Println("    ./palindromic-fuel -price=128.9 -reverse-litres=50 -radius=100")
+		fmt.Println()
+		fmt.Println("  Reverse lookup (find palindromes near target price):")
+		fmt.Println("    ./palindromic-fuel -price=128.9 -reverse-price=50.00 -radius=500")
+		fmt.Println()
+		fmt.Println("  Batch mode:")
+		fmt.Println("    ./palindromic-fuel -batch=128.9,135.7,142.3 -max=1000")
+		fmt.Println()
+		fmt.Println("  Batch mode with CSV export:")
+		fmt.Println("    ./palindromic-fuel -batch=128.9,135.7,142.3 -max=1000 -csv=batch.csv")
+		fmt.Println()
+		return
+	}
+	
+	// Batch mode
+	if *batchPtr != "" {
+		priceStrs := strings.Split(*batchPtr, ",")
+		var prices []float64
+		
+		for _, priceStr := range priceStrs {
+			price, err := strconv.ParseFloat(strings.TrimSpace(priceStr), 64)
+			if err != nil {
+				fmt.Printf("Error parsing price '%s': %v\n", priceStr, err)
+				return
+			}
+			prices = append(prices, price)
+		}
+		
+		fmt.Printf("\n=== Batch Processing %d Fuel Prices ===\n", len(prices))
+		start := time.Now()
+		results := BatchFindPalindromicCosts(prices, *maxLitresPtr)
+		elapsed := time.Since(start)
+		
+		fmt.Printf("\nTotal batch time: %.3fms\n", float64(elapsed.Microseconds())/1000.0)
+		fmt.Printf("Average per price: %.3fms\n\n", float64(elapsed.Microseconds())/1000.0/float64(len(prices)))
+		
+		for _, price := range prices {
+			printResults(results[price], price)
+		}
+		
+		// Export to CSV if requested
+		if *csvPtr != "" {
+			if err := exportBatchToCSV(*csvPtr, results, prices); err != nil {
+				fmt.Printf("\nError exporting to CSV: %v\n", err)
+			} else {
+				fmt.Printf("\nResults exported to %s\n", *csvPtr)
+			}
+		}
+		
+		return
+	}
+	
+	// Reverse lookup by litres
+	if *reverseLitresPtr > 0 {
+		fmt.Printf("\nFinding nearest palindromic cost to %.2f litres at %.1fp/litre\n", *reverseLitresPtr, *pricePtr)
+		fmt.Printf("Search radius: ±%d litres\n", *searchRadiusPtr)
+		
+		start := time.Now()
+		result := FindNearestPalindromicCost(*pricePtr, *reverseLitresPtr, *searchRadiusPtr)
+		elapsed := time.Since(start)
+		
+		if result != nil {
+			fmt.Printf("\nNearest palindromic cost:\n")
+			printResult(*result)
+			diff := math.Abs(result.Litres - *reverseLitresPtr)
+			fmt.Printf("Difference: %.2f litres\n", diff)
+		} else {
+			fmt.Println("\nNo palindromic costs found in search radius")
+		}
+		
+		fmt.Printf("\nSearch completed in %.3fms\n", float64(elapsed.Microseconds())/1000.0)
+		return
+	}
+	
+	// Reverse lookup by price
+	if *reversePricePtr > 0 {
+		fmt.Printf("\nFinding palindromic costs near £%.2f at %.1fp/litre\n", *reversePricePtr, *pricePtr)
+		fmt.Printf("Search radius: ±%dp\n", *searchRadiusPtr)
+		
+		start := time.Now()
+		results := FindPalindromicCostForTarget(*pricePtr, *reversePricePtr, *searchRadiusPtr)
+		elapsed := time.Since(start)
+		
+		if len(results) > 0 {
+			fmt.Printf("\nFound %d palindromic cost(s):\n\n", len(results))
+			for _, result := range results {
+				printResult(result)
+				targetDiff := math.Abs(parseFloat(result.CostPounds) - *reversePricePtr)
+				fmt.Printf("  Price difference: £%.2f\n", targetDiff)
+			}
+		} else {
+			fmt.Println("\nNo palindromic costs found in search radius")
+		}
+		
+		fmt.Printf("\nSearch completed in %.3fms\n", float64(elapsed.Microseconds())/1000.0)
+		return
+	}
+	
+	// Normal mode
+	start := time.Now()
+	results := FindPalindromicFuelCosts(*pricePtr, *maxLitresPtr)
+	elapsed := time.Since(start)
+	
+	fmt.Printf("\nPerformance: Found %d results in %.3fms\n", len(results), float64(elapsed.Microseconds())/1000.0)
+	fmt.Printf("Effective range checked: 1-%d litres\n", *maxLitresPtr)
+	
+	printResults(results, *pricePtr)
+	
+	// Export to CSV if requested
+	if *csvPtr != "" {
+		if err := exportToCSV(*csvPtr, results, *pricePtr); err != nil {
+			fmt.Printf("\nError exporting to CSV: %v\n", err)
+		} else {
+			fmt.Printf("\nResults exported to %s\n", *csvPtr)
+		}
+	}
+}
+
+func printResults(results []Result, price float64) {
+	fmt.Printf("\nFuel Price: %.1fp/litre\n", price)
+	fmt.Printf("Found %d palindromic costs:\n\n", len(results))
+	
+	maxShow := 50
+	toShow := results
+	if len(results) > maxShow {
+		toShow = results[:maxShow]
+	}
+	
+	for _, result := range toShow {
+		printResult(result)
+	}
+	
+	if len(results) > maxShow {
+		fmt.Printf("\n... and %d more results\n", len(results)-maxShow)
+	}
+}
+
+func printResult(result Result) {
+	litresStatus := "(whole number litres)"
+	if result.LitresIsPalindrome {
+		if result.Type == "palindromic_decimal" {
+			litresStatus = "(palindromic decimal litres)"
+		} else {
+			litresStatus = "(palindromic whole litres)"
+		}
+	}
+	
+	if result.Litres == math.Floor(result.Litres) {
+		fmt.Printf("%.0f litres = £%s %s\n", result.Litres, result.CostPounds, litresStatus)
+	} else {
+		fmt.Printf("%.2f litres = £%s %s\n", result.Litres, result.CostPounds, litresStatus)
+	}
+}
+
+func parseFloat(s string) float64 {
+	f, _ := strconv.ParseFloat(s, 64)
+	return f
+}
+
+// exportToCSV exports results to a CSV file
+func exportToCSV(filename string, results []Result, price float64) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create CSV file: %w", err)
+	}
+	defer file.Close()
+	
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+	
+	// Write header
+	header := []string{"Price per Litre (p)", "Litres", "Cost (£)", "Litres is Palindrome", "Type"}
+	if err := writer.Write(header); err != nil {
+		return fmt.Errorf("failed to write CSV header: %w", err)
+	}
+	
+	// Write data
+	for _, result := range results {
+		litresStr := fmt.Sprintf("%.2f", result.Litres)
+		if result.Litres == math.Floor(result.Litres) {
+			litresStr = fmt.Sprintf("%.0f", result.Litres)
+		}
+		
+		litresPalindrome := "No"
+		if result.LitresIsPalindrome {
+			litresPalindrome = "Yes"
+		}
+		
+		row := []string{
+			fmt.Sprintf("%.1f", price),
+			litresStr,
+			result.CostPounds,
+			litresPalindrome,
+			result.Type,
+		}
+		
+		if err := writer.Write(row); err != nil {
+			return fmt.Errorf("failed to write CSV row: %w", err)
+		}
+	}
+	
+	return nil
+}
+
+// exportBatchToCSV exports batch results to a CSV file
+func exportBatchToCSV(filename string, batchResults map[float64][]Result, prices []float64) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create CSV file: %w", err)
+	}
+	defer file.Close()
+	
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+	
+	// Write header
+	header := []string{"Price per Litre (p)", "Litres", "Cost (£)", "Litres is Palindrome", "Type"}
+	if err := writer.Write(header); err != nil {
+		return fmt.Errorf("failed to write CSV header: %w", err)
+	}
+	
+	// Write data for each price
+	for _, price := range prices {
+		results := batchResults[price]
+		for _, result := range results {
+			litresStr := fmt.Sprintf("%.2f", result.Litres)
+			if result.Litres == math.Floor(result.Litres) {
+				litresStr = fmt.Sprintf("%.0f", result.Litres)
+			}
+			
+			litresPalindrome := "No"
+			if result.LitresIsPalindrome {
+				litresPalindrome = "Yes"
+			}
+			
+			row := []string{
+				fmt.Sprintf("%.1f", price),
+				litresStr,
+				result.CostPounds,
+				litresPalindrome,
+				result.Type,
+			}
+			
+			if err := writer.Write(row); err != nil {
+				return fmt.Errorf("failed to write CSV row: %w", err)
+			}
+		}
+	}
+	
+	return nil
+}
