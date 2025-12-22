@@ -450,6 +450,10 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
             font-weight: 700;
             margin-bottom: 10px;
             text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, #ffffff 0%, #f0f8ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .header p {
@@ -700,22 +704,18 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
             }
         }
 
-        .emoji {
-            font-size: 1.2em;
-            vertical-align: middle;
-            margin-right: 5px;
-        }
+
     </style>
 </head>
 <body>
     <div class="wrapper">
         <div class="header">
-            <h1><span class="emoji">🚗</span> Palindromic Fuel Calculator <span class="emoji">✨</span></h1>
+            <h1>Palindromic Fuel Calculator</h1>
             <p>Discover fuel costs that read the same forwards and backwards!</p>
         </div>
 
         <div class="card">
-            <h2><span class="emoji">🔢</span> Calculate Palindromes</h2>
+            <h2>Calculate Palindromes</h2>
             <form method="POST">
                 <div class="form-row">
                     <div class="input-group">
@@ -754,7 +754,7 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
                 </div>
             </div>
 
-            <h2><span class="emoji">🎯</span> Results</h2>
+            <h2>Results</h2>
 
             <div class="results-grid">
                 {{range .Results}}
@@ -762,18 +762,18 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
                     <div class="result-main">
                         {{.FormattedLitres}}L = £{{.CostPounds}}
                         {{if .LitresIsPalindrome}}
-                            <span class="palindrome-badge">🎭 PALINDROME</span>
+                            <span class="palindrome-badge">PALINDROME</span>
                         {{end}}
                     </div>
                     <div class="result-meta">
                         {{if .LitresIsPalindrome}}
                             {{if eq .Type "palindromic_decimal"}}
-                                <span class="emoji">🔢</span> Palindromic Decimal Litres
+                                Palindromic Decimal Litres
                             {{else}}
-                                <span class="emoji">🔢</span> Palindromic Whole Litres
+                                Palindromic Whole Litres
                             {{end}}
                         {{else}}
-                            <span class="emoji">💯</span> Whole Number Litres
+                            Whole Number Litres
                         {{end}}
                     </div>
                 </div>
@@ -783,7 +783,7 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
         {{end}}
 
         <div class="card api-section">
-            <h2><span class="emoji">🔌</span> API Access</h2>
+            <h2>API Access</h2>
             <p>This calculator provides a REST API for programmatic access:</p>
 
             <h3>GET Request</h3>
