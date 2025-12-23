@@ -251,7 +251,7 @@ func TestFindPalindromicFuelCosts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := FindPalindromicFuelCosts(tt.pricePerLitre, tt.maxLitres)
+			results := FindPalindromicFuelCosts(tt.pricePerLitre, tt.maxLitres, 0.01)
 			if len(results) != tt.expectedCount {
 				t.Errorf("FindPalindromicFuelCosts(%f, %d) returned %d results, want %d",
 					tt.pricePerLitre, tt.maxLitres, len(results), tt.expectedCount)
@@ -292,7 +292,7 @@ func TestFindNearestPalindromicCost(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FindNearestPalindromicCost(tt.pricePerLitre, tt.targetLitres, tt.searchRadius)
+			result := FindNearestPalindromicCost(tt.pricePerLitre, tt.targetLitres, tt.searchRadius, 0.01)
 			if tt.expectResult && result == nil {
 				t.Errorf("FindNearestPalindromicCost(%f, %f, %d) expected result but got nil",
 					tt.pricePerLitre, tt.targetLitres, tt.searchRadius)
@@ -320,7 +320,7 @@ func TestFindPalindromicCostForTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := FindPalindromicCostForTarget(tt.pricePerLitre, tt.targetPounds, tt.searchRadiusPence)
+			results := FindPalindromicCostForTarget(tt.pricePerLitre, tt.targetPounds, tt.searchRadiusPence, 0.01)
 			if len(results) != tt.expectedCount {
 				t.Errorf("FindPalindromicCostForTarget(%f, %f, %d) returned %d results, want %d",
 					tt.pricePerLitre, tt.targetPounds, tt.searchRadiusPence, len(results), tt.expectedCount)
@@ -343,7 +343,7 @@ func TestBatchFindPalindromicCosts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := BatchFindPalindromicCosts(tt.prices, tt.maxLitres)
+			results := BatchFindPalindromicCosts(tt.prices, tt.maxLitres, 0.01)
 			if len(results) != tt.expectedKeys {
 				t.Errorf("BatchFindPalindromicCosts(%v, %d) returned %d results, want %d keys",
 					tt.prices, tt.maxLitres, len(results), tt.expectedKeys)
@@ -641,5 +641,31 @@ func TestParseFloat(t *testing.T) {
 				t.Errorf("parseFloat(%q) = %f, want %f", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+// Benchmarks
+
+func BenchmarkFindPalindromicFuelCosts(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		FindPalindromicFuelCosts(128.9, 1000, 0.01)
+	}
+}
+
+func BenchmarkGeneratePalindromesForDigits(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		generatePalindromesForDigits(5)
+	}
+}
+
+func BenchmarkIsPalindrome(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		isPalindrome(12321)
+	}
+}
+
+func BenchmarkIsPalindromeString(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		isPalindromeString("12321")
 	}
 }

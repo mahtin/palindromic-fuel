@@ -18,6 +18,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/csv"
 	"encoding/json"
 	"flag"
@@ -29,8 +30,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+//go:embed templates/index.html
+var tmpl string
 
 // Result represents a palindromic fuel cost finding
 type Result struct {
@@ -153,7 +158,7 @@ func isEffectivelyInteger(f float64, epsilon float64) bool {
 }
 
 // FindPalindromicFuelCosts finds all palindromic fuel costs for a given price
-func FindPalindromicFuelCosts(pricePerLitre float64, maxLitres int) []Result {
+func FindPalindromicFuelCosts(pricePerLitre float64, maxLitres int, epsilon float64) []Result {
 	var results []Result
 
 	minPence := int(math.Floor(pricePerLitre))
@@ -183,7 +188,7 @@ func FindPalindromicFuelCosts(pricePerLitre float64, maxLitres int) []Result {
 		}
 
 		// Check if litres is effectively a whole number
-		if isEffectivelyInteger(litres, 0.01) {
+		if isEffectivelyInteger(litres, epsilon) {
 			wholeLitres := int(math.Round(litres))
 			results = append(results, Result{
 				Litres:             float64(wholeLitres),
@@ -211,11 +216,11 @@ func FindPalindromicFuelCosts(pricePerLitre float64, maxLitres int) []Result {
 }
 
 // FindNearestPalindromicCost finds the nearest palindromic cost to a target amount
-func FindNearestPalindromicCost(pricePerLitre float64, targetLitres float64, searchRadius int) *Result {
+func FindNearestPalindromicCost(pricePerLitre float64, targetLitres float64, searchRadius int, epsilon float64) *Result {
 	minLitres := int(math.Max(1, targetLitres-float64(searchRadius)))
 	maxLitres := int(targetLitres + float64(searchRadius))
 
-	results := FindPalindromicFuelCosts(pricePerLitre, maxLitres)
+	results := FindPalindromicFuelCosts(pricePerLitre, maxLitres, epsilon)
 
 	var nearest *Result
 	minDiff := math.MaxFloat64
@@ -236,7 +241,7 @@ func FindNearestPalindromicCost(pricePerLitre float64, targetLitres float64, sea
 }
 
 // FindPalindromicCostForTarget finds palindromic costs near a target price
-func FindPalindromicCostForTarget(pricePerLitre float64, targetPounds float64, searchRadiusPence int) []Result {
+func FindPalindromicCostForTarget(pricePerLitre float64, targetPounds float64, searchRadiusPence int, epsilon float64) []Result {
 	var results []Result
 
 	targetPence := int(math.Round(targetPounds * 100))
@@ -263,7 +268,7 @@ func FindPalindromicCostForTarget(pricePerLitre float64, targetPounds float64, s
 			continue
 		}
 
-		if isEffectivelyInteger(litres, 0.01) {
+		if isEffectivelyInteger(litres, epsilon) {
 			wholeLitres := int(math.Round(litres))
 			results = append(results, Result{
 				Litres:             float64(wholeLitres),
@@ -289,14 +294,24 @@ func FindPalindromicCostForTarget(pricePerLitre float64, targetPounds float64, s
 	return results
 }
 
-// BatchFindPalindromicCosts processes multiple fuel prices
-func BatchFindPalindromicCosts(prices []float64, maxLitres int) map[float64][]Result {
+// BatchFindPalindromicCosts processes multiple fuel prices concurrently
+func BatchFindPalindromicCosts(prices []float64, maxLitres int, epsilon float64) map[float64][]Result {
 	results := make(map[float64][]Result)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 
 	for _, price := range prices {
-		results[price] = FindPalindromicFuelCosts(price, maxLitres)
+		wg.Add(1)
+		go func(p float64) {
+			defer wg.Done()
+			res := FindPalindromicFuelCosts(p, maxLitres, epsilon)
+			mu.Lock()
+			results[p] = res
+			mu.Unlock()
+		}(price)
 	}
 
+	wg.Wait()
 	return results
 }
 
@@ -370,7 +385,7 @@ func handleAPI(w http.ResponseWriter, r *http.Request) {
 		req = CalculateRequest{PricePerLitre: price, MaxLitres: max}
 	}
 
-	results := FindPalindromicFuelCosts(req.PricePerLitre, req.MaxLitres)
+	results := FindPalindromicFuelCosts(req.PricePerLitre, req.MaxLitres, 0.01)
 	json.NewEncoder(w).Encode(CalculateResponse{Results: results})
 }
 
@@ -403,7 +418,7 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
 
 			if err1 == nil && err2 == nil {
 				data.Request = CalculateRequest{PricePerLitre: price, MaxLitres: max}
-				results := FindPalindromicFuelCosts(price, max)
+				results := FindPalindromicFuelCosts(price, max, 0.01)
 				data.Results = make([]DisplayResult, len(results))
 				for i, result := range results {
 					formattedLitres := fmt.Sprintf("%.2f", result.Litres)
@@ -421,386 +436,6 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tmpl := `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Palindromic Fuel Calculator</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f8fafc;
-            min-height: 100vh;
-            color: #334155;
-            line-height: 1.6;
-        }
-
-        .wrapper {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 40px;
-            padding: 40px 20px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin: 20px auto 40px;
-            max-width: 800px;
-        }
-
-        .header h1 {
-            font-size: 2.5rem;
-            font-weight: 600;
-            margin-bottom: 15px;
-            color: #1e293b;
-            text-align: center;
-        }
-
-        .fuel-icon {
-            color: #f59e0b;
-            margin-right: 8px;
-        }
-
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-            font-weight: 300;
-        }
-
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 25px;
-            margin: 20px 0;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            border: 1px solid #e2e8f0;
-            transition: box-shadow 0.2s ease;
-        }
-
-        .card:hover {
-            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-        }
-
-        .card h2 {
-            color: #4f46e5;
-            font-size: 1.8rem;
-            margin-bottom: 20px;
-            font-weight: 600;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-row {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .input-group {
-            flex: 1;
-        }
-
-        .input-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: #374151;
-        }
-
-        .input-group input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e5e7eb;
-            border-radius: 12px;
-            font-size: 16px;
-            font-family: inherit;
-            transition: all 0.3s ease;
-            background: #f9fafb;
-        }
-
-        .input-group input:focus {
-            outline: none;
-            border-color: #4f46e5;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-        }
-
-        .input-group input::placeholder {
-            color: #9ca3af;
-        }
-
-        .btn {
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 500;
-            font-family: inherit;
-            cursor: pointer;
-            transition: background 0.2s ease;
-            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-        }
-
-        .btn:hover {
-            background: #2563eb;
-        }
-
-        .results-grid {
-            display: grid;
-            gap: 15px;
-            margin-top: 25px;
-        }
-
-        .result-card {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 16px;
-            transition: background 0.2s ease;
-            margin-bottom: 12px;
-        }
-
-        .result-card:hover {
-            background: #f1f5f9;
-        }
-
-        .result-main {
-            font-size: 1.4rem;
-            font-weight: 700;
-            color: #0f172a;
-            margin-bottom: 8px;
-        }
-
-        .result-meta {
-            color: #64748b;
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-
-        .palindrome-badge {
-            display: inline-block;
-            background: #f59e0b;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 500;
-            margin-left: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .error-card {
-            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-            border: 2px solid #dc2626;
-            color: #991b1b;
-            padding: 16px;
-            border-radius: 12px;
-            margin: 20px 0;
-        }
-
-        .api-section {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            margin-top: 30px;
-        }
-
-        .api-section h3 {
-            color: #1f2937;
-            margin-bottom: 15px;
-        }
-
-        .code-block {
-            background: #f1f5f9;
-            color: #374151;
-            padding: 12px;
-            border-radius: 6px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 14px;
-            overflow-x: auto;
-            margin: 10px 0;
-            border: 1px solid #e2e8f0;
-        }
-
-        .api-link {
-            display: inline-block;
-            background: #3b82f6;
-            color: white;
-            padding: 8px 16px;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 500;
-            font-family: inherit;
-            margin-top: 10px;
-            transition: background 0.2s ease;
-        }
-
-        .api-link:hover {
-            background: #2563eb;
-        }
-
-        .stats {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #e5e7eb;
-        }
-
-        .stats-item {
-            text-align: center;
-        }
-
-        .stats-number {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #4f46e5;
-        }
-
-        .stats-label {
-            color: #6b7280;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        @media (max-width: 768px) {
-            .wrapper {
-                padding: 15px;
-            }
-
-            .header h1 {
-                font-size: 2.2rem;
-            }
-
-            .form-row {
-                flex-direction: column;
-            }
-
-            .results-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .stats {
-                flex-direction: column;
-                gap: 15px;
-            }
-        }
-
-
-    </style>
-</head>
-<body>
-    <div class="wrapper">
-        <div class="header">
-            <h1><span class="fuel-icon">⛽</span> Palindromic Fuel Calculator</h1>
-            <p>Discover fuel costs that read the same forwards and backwards!</p>
-        </div>
-
-        <div class="card">
-            <h2>Calculate Palindromes</h2>
-            <form method="POST">
-                <div class="form-row">
-                    <div class="input-group">
-                        <label for="price">Price per Litre (pence)</label>
-                        <input type="number" id="price" name="price" step="0.01" placeholder="128.9" required>
-                    </div>
-                    <div class="input-group">
-                        <label for="max">Maximum Litres</label>
-                        <input type="number" id="max" name="max" placeholder="100" required>
-                    </div>
-                </div>
-                <button type="submit" class="btn">Calculate Palindromes</button>
-            </form>
-        </div>
-
-        {{if .Error}}
-        <div class="error-card">
-            <strong>Error:</strong> {{.Error}}
-        </div>
-        {{end}}
-
-        {{if .Results}}
-        <div class="card">
-            <div class="stats">
-                <div class="stats-item">
-                    <div class="stats-number">{{len .Results}}</div>
-                    <div class="stats-label">Palindromes Found</div>
-                </div>
-                <div class="stats-item">
-                    <div class="stats-number">{{.Request.PricePerLitre}}</div>
-                    <div class="stats-label">Price (p/litre)</div>
-                </div>
-                <div class="stats-item">
-                    <div class="stats-number">{{.Request.MaxLitres}}</div>
-                    <div class="stats-label">Max Litres</div>
-                </div>
-            </div>
-
-            <h2>Results</h2>
-
-            <div class="results-grid">
-                {{range .Results}}
-                <div class="result-card">
-                    <div class="result-main">
-                        {{.FormattedLitres}}L = £{{.CostPounds}}
-                        {{if .LitresIsPalindrome}}
-                            <span class="palindrome-badge">⭐ PALINDROME</span>
-                        {{end}}
-                    </div>
-                    <div class="result-meta">
-                        {{if .LitresIsPalindrome}}
-                            {{if eq .Type "palindromic_decimal"}}
-                                Palindromic Decimal Litres
-                            {{else}}
-                                Palindromic Whole Litres
-                            {{end}}
-                        {{else}}
-                            Whole Number Litres
-                        {{end}}
-                    </div>
-                </div>
-                {{end}}
-            </div>
-        </div>
-        {{end}}
-
-        <div class="card api-section">
-            <h2>API Access</h2>
-            <p>This calculator provides a REST API for programmatic access:</p>
-
-            <h3>GET Request</h3>
-            <div class="code-block">curl "{{.BaseURL}}/api/calculate?price=128.9&max=100"</div>
-
-            <h3>POST Request</h3>
-            <div class="code-block">curl -X POST {{.BaseURL}}/api/calculate \
-  -H "Content-Type: application/json" \
-  -d '{"pricePerLitre": 128.9, "maxLitres": 100}'</div>
-
-            <a href="{{.BaseURL}}/api/calculate?price=128.9&max=50" target="_blank" class="api-link">Try the API</a>
-        </div>
-    </div>
-</body>
-</html>`
-
 	t, err := template.New("webui").Parse(tmpl)
 	if err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
@@ -817,6 +452,7 @@ func main() {
 	reverseLitresPtr := flag.Float64("reverse-litres", 0, "Find nearest palindrome to this litre amount")
 	reversePricePtr := flag.Float64("reverse-price", 0, "Find palindromes near this target price in pounds")
 	searchRadiusPtr := flag.Int("radius", 100, "Search radius for reverse lookup")
+	epsilonPtr := flag.Float64("epsilon", 0.01, "Epsilon for integer check")
 	batchPtr := flag.String("batch", "", "Comma-separated list of prices for batch processing")
 	csvPtr := flag.String("csv", "", "Export results to CSV file (e.g., results.csv)")
 	webPtr := flag.Bool("web", false, "Start web server on port 8080")
@@ -895,7 +531,7 @@ func main() {
 
 		fmt.Printf("\n=== Batch Processing %d Fuel Prices ===\n", len(prices))
 		start := time.Now()
-		results := BatchFindPalindromicCosts(prices, *maxLitresPtr)
+		results := BatchFindPalindromicCosts(prices, *maxLitresPtr, *epsilonPtr)
 		elapsed := time.Since(start)
 
 		fmt.Printf("\nTotal batch time: %.3fms\n", float64(elapsed.Microseconds())/1000.0)
@@ -923,7 +559,7 @@ func main() {
 		fmt.Printf("Search radius: ±%d litres\n", *searchRadiusPtr)
 
 		start := time.Now()
-		result := FindNearestPalindromicCost(*pricePtr, *reverseLitresPtr, *searchRadiusPtr)
+		result := FindNearestPalindromicCost(*pricePtr, *reverseLitresPtr, *searchRadiusPtr, *epsilonPtr)
 		elapsed := time.Since(start)
 
 		if result != nil {
@@ -945,7 +581,7 @@ func main() {
 		fmt.Printf("Search radius: ±%dp\n", *searchRadiusPtr)
 
 		start := time.Now()
-		results := FindPalindromicCostForTarget(*pricePtr, *reversePricePtr, *searchRadiusPtr)
+		results := FindPalindromicCostForTarget(*pricePtr, *reversePricePtr, *searchRadiusPtr, *epsilonPtr)
 		elapsed := time.Since(start)
 
 		if len(results) > 0 {
@@ -965,7 +601,7 @@ func main() {
 
 	// Normal mode
 	start := time.Now()
-	results := FindPalindromicFuelCosts(*pricePtr, *maxLitresPtr)
+	results := FindPalindromicFuelCosts(*pricePtr, *maxLitresPtr, *epsilonPtr)
 	elapsed := time.Since(start)
 
 	fmt.Printf("\nPerformance: Found %d results in %.3fms\n", len(results), float64(elapsed.Microseconds())/1000.0)
