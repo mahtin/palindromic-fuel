@@ -29,5 +29,8 @@ COPY --from=builder /app/palindromic-fuel .
 # Expose port for web server
 EXPOSE 8080
 
+# Set default port environment variable
+ENV PORT=8080
+
 # Run the application
 CMD ["./palindromic-fuel", "-web"]

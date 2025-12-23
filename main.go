@@ -816,14 +816,27 @@ func main() {
 
 	// Web server mode
 	if *webPtr {
-		fmt.Printf("Starting web server on port %s\n", *portPtr)
-		fmt.Printf("Web UI: http://localhost:%s\n", *portPtr)
-		fmt.Printf("API: http://localhost:%s/api/calculate\n", *portPtr)
+		// Read configuration from environment variables
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = *portPtr // fallback to flag
+		}
+
+		ip := os.Getenv("IP")
+		if ip == "" {
+			ip = "0.0.0.0" // default to all interfaces
+		}
+
+		addr := ip + ":" + port
+
+		fmt.Printf("Starting web server on %s\n", addr)
+		fmt.Printf("Web UI: http://%s\n", addr)
+		fmt.Printf("API: http://%s/api/calculate\n", addr)
 
 		http.HandleFunc("/", handleWebUI)
 		http.HandleFunc("/api/calculate", handleAPI)
 
-		log.Fatal(http.ListenAndServe(":"+*portPtr, nil))
+		log.Fatal(http.ListenAndServe(addr, nil))
 	}
 
 	if *pricePtr == 0 && *batchPtr == "" && !*webPtr {
