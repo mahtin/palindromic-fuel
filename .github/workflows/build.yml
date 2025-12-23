@@ -22,16 +22,19 @@ jobs:
         go-version: ${{ matrix.go-version }}
 
     - name: Verify dependencies
-      run: go mod tidy
+      run: make deps
+
+    - name: Check formatting
+      run: make fmt-check
 
     - name: Build
-      run: go build -o palindromic-fuel main.go
+      run: make build
 
     - name: Test
-      run: go test -v ./...
+      run: make test
 
     - name: Vet
-      run: go vet main.go
+      run: make vet
 
     - name: Install staticcheck
       run: go install honnef.co/go/tools/cmd/staticcheck@latest
