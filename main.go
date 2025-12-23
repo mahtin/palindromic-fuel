@@ -315,6 +315,7 @@ type TemplateData struct {
 	Results []DisplayResult
 	Error   string
 	Request CalculateRequest
+	BaseURL string
 }
 
 type DisplayResult struct {
@@ -380,7 +381,16 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := TemplateData{}
+	// Construct base URL from request
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	baseURL := scheme + "://" + r.Host
+
+	data := TemplateData{
+		BaseURL: baseURL,
+	}
 
 	if r.Method == "POST" {
 		r.ParseForm()
@@ -778,14 +788,14 @@ func handleWebUI(w http.ResponseWriter, r *http.Request) {
             <p>This calculator provides a REST API for programmatic access:</p>
 
             <h3>GET Request</h3>
-            <div class="code-block">curl "http://localhost:8080/api/calculate?price=128.9&max=100"</div>
+            <div class="code-block">curl "{{.BaseURL}}/api/calculate?price=128.9&max=100"</div>
 
             <h3>POST Request</h3>
-            <div class="code-block">curl -X POST http://localhost:8080/api/calculate \
+            <div class="code-block">curl -X POST {{.BaseURL}}/api/calculate \
   -H "Content-Type: application/json" \
   -d '{"pricePerLitre": 128.9, "maxLitres": 100}'</div>
 
-            <a href="/api/calculate?price=128.9&max=50" target="_blank" class="api-link">Try the API</a>
+            <a href="{{.BaseURL}}/api/calculate?price=128.9&max=50" target="_blank" class="api-link">Try the API</a>
         </div>
     </div>
 </body>
