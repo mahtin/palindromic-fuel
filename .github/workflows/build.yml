@@ -48,6 +48,7 @@ jobs:
 
   docker-build:
     runs-on: ubicloud
+    needs: test
     permissions:
       contents: read
       packages: write
