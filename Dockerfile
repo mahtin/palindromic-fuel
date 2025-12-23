@@ -9,11 +9,8 @@ COPY go.mod ./
 # Download dependencies (go.sum will be created if needed)
 RUN go mod download
 
-# Copy source code
-COPY main.go main_test.go ./
-COPY templates/ ./templates/
-
-# Build the application
+# Copy source code and build
+COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o palindromic-fuel main.go
 
 # Final stage - use scratch for minimal, secure image
