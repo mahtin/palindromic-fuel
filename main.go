@@ -32,6 +32,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 //go:embed templates/index.html
@@ -673,6 +675,11 @@ func parseFloat(s string) float64 {
 	return f
 }
 
+func titleIt(s string) string {
+	titleCaser := cases.Title(language.English)
+	return titleCaser.String(s)
+}
+
 // exportToCSV exports results to a CSV file
 func exportToCSV(filename string, results []Result, price float64) error {
 	file, err := os.Create(filename)
@@ -685,7 +692,7 @@ func exportToCSV(filename string, results []Result, price float64) error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"Price per " + strings.Title(volumeName) + " (p)", strings.Title(volumeName) + "s", "Cost (" + currencyName + ")", strings.Title(volumeName) + "s is Palindrome", "Type"}
+	header := []string{"Price per " + titleIt(volumeName) + " (p)", titleIt(volumeName) + "s", "Cost (" + currencyName + ")", titleIt(volumeName) + "s is Palindrome", "Type"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
@@ -730,7 +737,7 @@ func exportBatchToCSV(filename string, batchResults map[float64][]Result, prices
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"Price per " + strings.Title(volumeName) + " (p)", strings.Title(volumeName) + "s", "Cost (" + currencyName + ")", strings.Title(volumeName) + "s is Palindrome", "Type"}
+	header := []string{"Price per " + titleIt(volumeName) + " (p)", titleIt(volumeName) + "s", "Cost (" + currencyName + ")", titleIt(volumeName) + "s is Palindrome", "Type"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
